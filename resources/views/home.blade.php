@@ -3,17 +3,18 @@
 @section('content')
 <div class="container">
     <div class="row justify-content-center">
-        <div class="col-lg-10 col-xl-8">
+        <div class="col">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header bg-gradient">
                     User Data
                 </div>
 
-                <div class="card-body">
-                    <button class="btn btn-secondary mb-3" data-bs-toggle="modal" data-bs-target="#add-user-modal">
+                <div class="card-body" style="overflow-x: scroll">
+                    <button class="btn btn-secondary bg-gradient mb-3" data-bs-toggle="modal"
+                            data-bs-target="#add-user-modal">
                         <i class="bi bi-plus-lg"></i> Add New Users
                     </button>
-                    <table id="user-data-table" class="table table-striped">
+                    <table id="user-data-table" class="table table-striped table-responsive">
                         <caption>User List</caption>
                         <thead>
                         <tr>
@@ -83,7 +84,7 @@
                     </div>
                     <div class="mb-3">
                         <label for="email_edit" class="form-label">E-mail address</label>
-                        <input type="email" class="form-control" id="email_edit" name="email" placeholder="name@example.com" readonly>
+                        <input type="email" class="form-control" id="email_edit" name="email" placeholder="name@example.com" disabled>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -109,17 +110,23 @@
                     {data : 'name'},
                     {data : 'email'},
                     {
+                        class : 'text-center text-nowrap',
                         data : 'id',
                         defaultContent : '',
                         orderable : false,
                         render : function (t) {
-                            let edit = `
+                            let editButton = `
                             <button class="btn btn-info bg-gradient" data-bs-toggle="modal"
                             data-bs-target="#edit-user-modal" data-id="${t}">
                                 <i class="bi bi-pencil-square"></i> Edit
                             </button>`
-                            return edit
-                        }
+                            let deleteButton = `
+                            <button class="btn btn-danger bg-gradient delete-data-button"  data-id="${t}">
+                                <i class="bi bi-trash"></i> Delete
+                            </button>`
+                            return editButton + deleteButton
+                        },
+                        width : '200px'
                     },
                 ]
             })
@@ -136,9 +143,33 @@
                     success : function (response) {
                         $('#add-user-modal').modal('hide');
                         table.draw();
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success',
+                            text: response.message,
+                            timer: 3000,
+                            timerProgressBar: true,
+                        })
                     },
                     error : function (xhr, status, error) {
-                        console.log(xhr)
+                        if (xhr.status === 422) {
+                            let errors = xhr.responseJSON.errors;
+                            $('#add-user-form :input').each(function () {
+                                $(this).parent().children('div.invalid-feedback').remove()
+                                $(this).removeClass('is-invalid')
+                                if (errors.hasOwnProperty($(this).attr('name'))) {
+                                    let errorMessage = document.createElement('div');
+                                    errorMessage.classList.add('invalid-feedback');
+                                    errorMessage.innerHTML = errors[$(this).attr('name')];
+                                    $(this).addClass('is-invalid')
+                                    $(this).parent().append(errorMessage);
+                                }
+                            })
+                        }
+                        Toast.fire({
+                            icon : 'error',
+                            title : error
+                        });
                     }
                 })
             })
@@ -176,14 +207,13 @@
                                 }
                             }
                         });
-
                     }
                 })
             }).on('hide.bs.modal', function (event) {
                 $('#edit-user-form').trigger('reset');
                 $('#edit-user-form :input').each(function () {
-                    $(this).parent().children('span.help-block.error').remove();
-                    $(this).parent().removeClass('has-error');
+                    $(this).parent().children('div.invalid-feedback').remove();
+                    $(this).removeClass('is-invalid');
                     $(this).attr('readonly', true)
                 });
             })
@@ -210,14 +240,76 @@
                     success : function (response) {
                         $('#edit-user-modal').modal('hide')
                         table.draw()
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success',
+                            text: response.message,
+                            timer: 3000,
+                            timerProgressBar: true,
+                        })
                     },
                     error : function (xhr, status, error) {
-
+                        if (xhr.status === 422) {
+                            let errors = xhr.responseJSON.errors;
+                            $('#edit-user-form :input').each(function () {
+                                $(this).parent().children('div.invalid-feedback').remove()
+                                $(this).removeClass('is-invalid')
+                                if (errors.hasOwnProperty($(this).attr('name'))) {
+                                    let errorMessage = document.createElement('div');
+                                    errorMessage.classList.add('invalid-feedback');
+                                    errorMessage.innerHTML = errors[$(this).attr('name')];
+                                    $(this).addClass('is-invalid')
+                                    $(this).parent().append(errorMessage);
+                                }
+                            })
+                        }
+                        Toast.fire({
+                            icon : 'error',
+                            title : error
+                        });
                     }
                 })
-
             })
 
+            $('#user-data-table').on('click', '.delete-data-button', function (event) {
+                let button = $(this);
+                let dataId = button.data('id')
+
+                Swal.fire({
+                    icon : 'warning',
+                    title: 'Do you want to delete the data?',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes',
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        let url = '{{ route('users.destroy', ['user' => '%%user%%']) }}'
+                        url = url.replace('%%user%%', dataId)
+                        $.ajax({
+                            url : url,
+                            type : 'DELETE',
+                            success : function (response) {
+                                table.draw()
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Success',
+                                    text: response.message,
+                                    timer: 3000,
+                                    timerProgressBar: true,
+                                })
+                            },
+                            error : function (xhr, status, error) {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Error',
+                                    text: xhr.responseJSON.message,
+                                    timer: 3000,
+                                    timerProgressBar: true,
+                                })
+                            }
+                        })
+                    }
+                })
+            })
         })
     </script>
 @endpush
